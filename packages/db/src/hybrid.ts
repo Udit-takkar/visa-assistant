@@ -100,12 +100,16 @@ export async function indexCapturedPassages(identity?: { model: string; key: str
   return { added, model, modelKey: key };
 }
 
-export async function retrieveHybrid(query: string, country: string, profile: string, overview: boolean) {
-  const reviewed = await retrieveEvidence(query, country, profile, overview);
+export async function retrieveHybrid(query: string, country: string, profile: string, overview: boolean, lexicalQuery = query) {
+  const reviewed = await retrieveEvidence(lexicalQuery, country, profile, overview);
   const evidence: RetrievedEvidence[] = reviewed.map(row => ({ ...row, reviewStatus: "reviewed" }));
   try {
     const identity = await modelIdentity();
     await indexCapturedPassages(identity);
+    const counts = await getPool().query<{ total: number; matching: number }>(`SELECT count(*)::int AS total,
+      count(*) FILTER (WHERE ($2='unknown' OR p.country=$2) AND ($3='unknown' OR p.profile=$3))::int AS matching
+      FROM passages p JOIN sources s ON s.id=p.source_id AND s.version=p.source_version WHERE p.model_key=$1`,
+      [identity.key,country,profile]);
     const [vector] = await embed(identity.model, [`task: search result | query: ${query.slice(0,4000)}`]);
     const rows = await getPool().query<{
       id: string; body: string; source_id: string; source_version: number; title: string;
@@ -118,6 +122,7 @@ export async function retrieveHybrid(query: string, country: string, profile: st
       FROM passages p JOIN sources s ON s.id=p.source_id AND s.version=p.source_version
       LEFT JOIN comments c ON c.id=p.comment_id
       WHERE p.model_key=$3 AND ($4='unknown' OR p.country=$4) AND ($5='unknown' OR p.profile=$5)
+        AND (NOT $6::boolean OR p.comment_id IS NULL)
     ), semantic AS (
       SELECT id, row_number() OVER(ORDER BY similarity DESC,id) AS rank FROM eligible
       WHERE similarity >= 0.40 ORDER BY similarity DESC,id LIMIT 20
@@ -129,7 +134,7 @@ export async function retrieveHybrid(query: string, country: string, profile: st
         SELECT id, 1.0/(60+rank) AS score FROM semantic UNION ALL SELECT id,1.0/(60+rank) FROM lexical
       ) results GROUP BY id
     ) SELECT e.*,f.score::float FROM eligible e JOIN fused f USING(id) ORDER BY f.score DESC,e.id LIMIT 6`,
-      [JSON.stringify(vector), query, identity.key, country, profile]);
+      [JSON.stringify(vector), lexicalQuery, identity.key, country, profile, overview]);
     for (const row of rows.rows) {
       // Prefer a checked interpretation when its quote is contained in the same passage.
       if (evidence.some(e => e.sourceId === row.source_id && row.body.includes(e.quote))) continue;
@@ -138,15 +143,15 @@ export async function retrieveHybrid(query: string, country: string, profile: st
         profile: row.profile, action: "unknown", sourceId: row.source_id, sourceVersion: row.source_version,
         capturedAt: row.captured_at?.toISOString(), kind: "applicant_experience", coverage: "partial", reviewStatus: "captured_unreviewed" });
     }
-    return { evidence: evidence.slice(0,8), kind: "hybrid" as const,
+    return { captureCount: counts.rows[0].total, filteredCaptureCount: counts.rows[0].matching, evidence: evidence.slice(0,8), kind: "hybrid" as const,
       notice: "Semantic embeddings and text search retrieved current captures. Unreviewed passages are applicant claims; inspect their quotes and sources." };
   } catch (error) {
-    return { evidence, kind: "reviewed_text_fallback" as const,
+    return { captureCount: 0, filteredCaptureCount: 0, evidence, kind: "reviewed_text_fallback" as const,
       notice: `Semantic retrieval unavailable: ${error instanceof Error ? error.message : "unknown error"} Only reviewed text matches are shown.` };
   }
 }
 
-export async function hybridEvidenceStillCurrent(rows: RetrievedEvidence[]) {
+export async function hybridEvidenceStillCurrent(rows: Pick<RetrievedEvidence, "id" | "sourceVersion" | "reviewStatus">[]) {
   const reviewed = rows.filter(row => row.reviewStatus === "reviewed");
   if (!await evidenceStillCurrent(reviewed)) return false;
   const raw = rows.filter(row => row.reviewStatus === "captured_unreviewed");

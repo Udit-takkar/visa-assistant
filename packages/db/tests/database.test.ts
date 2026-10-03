@@ -10,6 +10,7 @@ import {
   reviewObservation,
   retrieveEvidence,
   evidenceStillCurrent,
+  hybridEvidenceStillCurrent,
   reviewReadiness,
   registerSource,
   listSources,
@@ -265,4 +266,19 @@ test("invented quotes, foreign comments, and stale extraction cannot become obse
     /Evidence changed/
   );
   assert.deepEqual((await evidenceWorkspace(source.id)).observations, []);
+});
+
+
+test("captured passage citations become unusable when the source changes", async () => {
+  const source = await registerSource(input);
+  await captureSource(source.id, "Synthetic captured applicant text.", 0);
+  const vector = Array(768).fill(0); vector[0] = 1;
+  const id = "00000000-0000-0000-0000-000000000001";
+  await getPool().query(`INSERT INTO passages (id,source_id,source_version,body,start_offset,model_key,embedding)
+    VALUES ($1,$2,1,$3,0,'synthetic-vector-fixture',$4::vector)`,
+    [id,source.id,"Synthetic captured applicant text.",JSON.stringify(vector)]);
+  const citation = { id, sourceVersion: 1, reviewStatus: "captured_unreviewed" as const };
+  assert.equal(await hybridEvidenceStillCurrent([citation]), true);
+  await captureSource(source.id, "Synthetic corrected text.", 1);
+  assert.equal(await hybridEvidenceStillCurrent([citation]), false);
 });

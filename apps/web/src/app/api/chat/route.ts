@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     const overview = wantsDocumentOverview(query);
     const documentTerms = contextualDocumentTerms(query, history);
     const retrievalQuery = documentTerms.length ? `${query} ${documentTerms.join(" ")}` : query;
-    const retrieval = await retrieveHybrid(retrievalQuery, country, profile, overview);
+    const retrieval = await retrieveHybrid(retrievalQuery, country, profile, overview, documentTerms.length ? documentTerms.join(" OR ") : query);
     let evidence = retrieval.evidence;
     const searchedTerms = [retrievalQuery];
     let modelNotice = retrieval.notice;
@@ -47,7 +47,8 @@ export async function POST(request: Request) {
     }
     if (!statements.length && !approvalQuestion && !requirementQuestion && evidence.length && process.env.OLLAMA_MODEL) {
       try {
-        statements = await answerWithEvidence(query, evidence, history, overview ? 3 : 2);
+        const modelQuestion = overview ? "Give a partial overview of documents explicitly reported in these applicant passages. Use lists unless the quoted passage explicitly states submitted or carried; do not prescribe documents for the user." : query;
+        statements = await answerWithEvidence(modelQuestion, evidence, history, overview ? 3 : 1);
         answerUnsupported = statements.length === 0;
         modelNotice = retrieval.notice + " Qwen answered from these passages; check its interpretation against the quotes.";
       } catch (error) {
@@ -58,7 +59,7 @@ export async function POST(request: Request) {
     if (!(await hybridEvidenceStillCurrent(evidence)))
       throw new SourceError("Evidence changed while answering. Send the question again to use the current review.", 409);
     const readiness = evidence.length ? null : await reviewReadiness();
-    const gapReason = approvalQuestion ? "approval_prediction_unavailable" : requirementQuestion ? "official_guidance_missing" : answerUnsupported ? "answer_gap" : evidence.length ? null : !readiness?.approved ? "nothing_reviewed" :
+    const gapReason = approvalQuestion ? "approval_prediction_unavailable" : requirementQuestion ? "official_guidance_missing" : answerUnsupported ? "answer_gap" : evidence.length ? null : retrieval.kind === "hybrid" && retrieval.captureCount ? (retrieval.filteredCaptureCount ? "search_gap" : "filter_gap") : !readiness?.approved ? "nothing_reviewed" :
       !(await hasReviewedEvidence(country, profile)) ? "filter_gap" : "search_gap";
     const message = approvalQuestion
       ? "I cannot predict or guarantee visa approval from applicant reports. I can help inspect reported documents and their sources, but individual experiences do not establish your approval chances."

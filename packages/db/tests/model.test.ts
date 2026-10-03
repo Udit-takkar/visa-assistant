@@ -163,3 +163,16 @@ test("approval prediction requests stay separate from reported document question
   assert.equal(asksApprovalPrediction("Will my visa be approved?"), true);
   assert.equal(asksApprovalPrediction("Did they submit bank statements?"), false);
 });
+
+
+test("a document list cannot acquire a carried action in its explanation", () => {
+  const evidence = [{ id: "P1", summary: "Source passage", quote: "Salary slips, NOC, ITRs.", subject: "original_poster", country: "unknown", profile: "unknown", action: "unknown" }];
+  assert.throws(() => validateAnswer({ statements: [{ text: "The author carried salary slips.", evidenceIds: ["P1"] }] }, evidence), /carried action/);
+  assert.equal(validateAnswer({ statements: [{ text: "The author lists salary slips.", evidenceIds: ["P1"] }] }, evidence).length,1);
+});
+
+test("a commenter citation cannot be attributed to the original poster", () => {
+  const evidence = [{ id: "P1", summary: "Source passage", quote: "I submitted bank statements.", subject: "other", country: "unknown", profile: "unknown", action: "unknown" }];
+  assert.throws(() => validateAnswer({ statements: [{ text: "The original poster submitted bank statements.", evidenceIds: ["P1"] }] }, evidence), /commenter report/);
+  assert.equal(validateAnswer({ statements: [{ text: "A commenter reports submitting bank statements.", evidenceIds: ["P1"] }] }, evidence).length,1);
+});
