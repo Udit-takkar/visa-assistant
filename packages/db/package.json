@@ -1,0 +1,33 @@
+{
+  "name": "@schengen/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "generate": "drizzle-kit generate",
+    "migrate": "tsx scripts/migrate.ts",
+    "seed": "tsx scripts/seed.ts",
+    "test": "tsx --test tests/*.test.ts",
+    "test:reset": "tsx scripts/reset-test.ts",
+    "typecheck": "tsc --noEmit",
+    "import:capture": "tsx scripts/import-capture.ts",
+    "model:check": "tsx scripts/check-model.ts",
+    "index:passages": "tsx scripts/index-passages.ts"
+  },
+  "dependencies": {
+    "@schengen/core": "workspace:*",
+    "dotenv": "^18.0.5",
+    "drizzle-orm": "^0.45.3",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "^0.31.11",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3"
+  }
+}

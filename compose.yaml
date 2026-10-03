@@ -1,0 +1,18 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg18
+    environment:
+      POSTGRES_USER: schengen
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a development database password}
+      POSTGRES_DB: schengen
+    ports:
+      - "127.0.0.1:55439:5432"
+    volumes:
+      - schengen-postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U schengen -d schengen"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+volumes:
+  schengen-postgres:

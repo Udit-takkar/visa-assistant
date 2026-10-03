@@ -1,0 +1,24 @@
+{
+  "name": "schengen-visa",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter @schengen/web dev",
+    "build": "pnpm --filter @schengen/web build",
+    "start": "pnpm --filter @schengen/web start",
+    "lint": "pnpm --filter @schengen/web lint",
+    "typecheck": "pnpm --filter @schengen/db typecheck && pnpm --filter @schengen/web typecheck",
+    "test:e2e": "pnpm --filter @schengen/web test:e2e",
+    "db:generate": "pnpm --filter @schengen/db generate",
+    "db:migrate": "pnpm --filter @schengen/db migrate",
+    "db:seed": "pnpm --filter @schengen/db seed",
+    "test:db": "pnpm --filter @schengen/db test",
+    "source:import": "pnpm --filter @schengen/db import:capture",
+    "model:check": "pnpm --filter @schengen/db model:check",
+    "source:index": "pnpm --filter @schengen/db index:passages"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.16.1"
+}

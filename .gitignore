@@ -1,0 +1,25 @@
+node_modules/
+.next/
+out/
+dist/
+.env*
+!.env.example
+*.tsbuildinfo
+.DS_Store
+coverage/
+playwright-report/
+test-results/
+
+.local/
+
+.next-e2e/
+
+# Local project planning notes
+/docs/
+/TASKS.md
+
+.next-production/
+
+.next-rag/
+
+TASKS.md
