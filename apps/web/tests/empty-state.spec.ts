@@ -8,7 +8,7 @@ test("empty assistant explains pending review and links to the source", async ({
   await page.getByLabel("Your visa question").fill("What documents do i need?");
   await page.getByRole("button", { name: "Send message" }).click();
   await expect(page.getByRole("log")).toContainText("draft summaries");
-  await expect(page.getByRole("log")).toContainText("Which country are you applying to");
+  await expect(page.getByRole("log")).toContainText("describe your destination");
   const reviewLink = page.getByRole("link", { name: "Review Synthetic pending review" });
   await expect(reviewLink).toHaveAttribute("href", `/sources/${id}`);
   await reviewLink.click();

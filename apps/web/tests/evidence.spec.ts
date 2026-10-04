@@ -72,8 +72,6 @@ test("selected replies become cited evidence only after review, and later contex
   await expect(page.getByText("approved", { exact: true })).toBeVisible();
   await page.goto("/assistant");
   await page.getByLabel("Your visa question").fill("freelance contracts");
-  await page.getByLabel("Destination country code").fill("CH");
-  await page.getByLabel("Applicant profile").selectOption("freelancer");
   await page.getByRole("button", { name: "Send message" }).click();
   await expect(page.getByRole("log")).toContainText(
     "I submitted freelance contracts."

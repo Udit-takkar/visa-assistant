@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import {
   Conversation,
   ConversationContent,
@@ -45,10 +44,8 @@ type Answer = {
 const starters = ["freelance contracts", "bank statements", "cover letter"];
 export function AssistantPanel() {
   const [draft, setDraft] = useState("");
-  const [country, setCountry] = useState("");
-  const [profile, setProfile] = useState("unknown");
   const [turns, setTurns] = useState<
-    { question: string; answer: Answer; country: string; profile: string }[]
+    { question: string; answer: Answer }[]
   >([]);
   const [pendingQuestion, setPendingQuestion] = useState("");
   const [busy, setBusy] = useState(false);
@@ -57,8 +54,6 @@ export function AssistantPanel() {
     event.preventDefault();
     if (!draft.trim() || busy) return;
     const question = draft.trim();
-    const destination = country.trim().toUpperCase() || "unknown";
-    const turnCountry = destination === "unknown" ? "all" : destination;
     setPendingQuestion(question);
     setBusy(true);
     setError("");
@@ -68,12 +63,12 @@ export function AssistantPanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           question,
-          country: destination,
-          profile,
-          history: turns.filter(t => t.country === turnCountry && t.profile === profile).slice(-6).map(t => t.question),
+          country: "unknown",
+          profile: "unknown",
+          history: turns.slice(-6).map(t => t.question),
         }),
       });
-      setTurns(previous => [...previous, { question, answer, country: turnCountry, profile }]);
+      setTurns(previous => [...previous, { question, answer }]);
       setDraft(current => current.trim() === question ? "" : current);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not search evidence.");
@@ -120,9 +115,6 @@ export function AssistantPanel() {
                     <Message from="user">
                       <MessageContent>
                         <p>{turn.question}</p>
-                        <small>
-                          Country: {turn.country} · Profile: {turn.profile}
-                        </small>
                       </MessageContent>
                     </Message>
                     <Message from="assistant">
@@ -197,45 +189,12 @@ export function AssistantPanel() {
             ))}
           </div>
           <form onSubmit={ask} className="chat-composer">
-            <div className="assistant-filters">
-              <label>
-                Destination country code
-                <Input
-                  placeholder="All countries, or CH / FR"
-                  value={country}
-                  maxLength={2}
-                  onChange={(e) => setCountry(e.target.value)}
-                />
-              </label>
-              <label>
-                Applicant profile
-                <select
-                  aria-label="Applicant profile"
-                  value={profile}
-                  onChange={(e) => setProfile(e.target.value)}
-                >
-                  {[
-                    "unknown",
-                    "freelancer",
-                    "salaried",
-                    "student",
-                    "self_employed",
-                    "retired",
-                    "unemployed",
-                  ].map((value) => (
-                    <option key={value} value={value}>
-                      {value === "unknown" ? "All profiles" : value}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
             <label className="sr-only" htmlFor="question-draft">
               Your visa question
             </label>
             <Textarea
               id="question-draft"
-              placeholder="Ask about your documents or circumstances…"
+              placeholder="Describe your destination, work situation, and visa question…"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               maxLength={4000}
@@ -264,8 +223,7 @@ export function AssistantPanel() {
             <h3>Evidence you can inspect.</h3>
             <p>
               Each result contains a captured passage or reviewed observation, an exact quote, and
-              original Reddit permalink. Specific country and profile filters
-              exclude unknown classifications.
+              original Reddit permalink. Describe your destination and work situation in your question.
             </p>
             <p>
               These are applicant experiences. Official country checklists still
