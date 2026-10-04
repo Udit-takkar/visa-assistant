@@ -4,6 +4,7 @@ import { retrieveEvidence, evidenceStillCurrent } from "./evidence";
 
 export type RetrievedEvidence = Awaited<ReturnType<typeof retrieveEvidence>>[number] & {
   reviewStatus: "reviewed" | "captured_unreviewed";
+  isTemplate?: boolean;
 };
 
 // Preserve literal substrings and offsets. Paragraph grouping keeps document lists together.
@@ -100,7 +101,7 @@ export async function indexCapturedPassages(identity?: { model: string; key: str
   return { added, model, modelKey: key };
 }
 
-export async function retrieveHybrid(query: string, country: string, profile: string, overview: boolean, lexicalQuery = query) {
+export async function retrieveHybrid(query: string, country: string, profile: string, overview: boolean, lexicalQuery = query, templateRequest = false) {
   const reviewed = await retrieveEvidence(lexicalQuery, country, profile, overview);
   const evidence: RetrievedEvidence[] = reviewed.map(row => ({ ...row, reviewStatus: "reviewed" }));
   try {
@@ -112,10 +113,14 @@ export async function retrieveHybrid(query: string, country: string, profile: st
       [identity.key,country,profile]);
     const [vector] = await embed(identity.model, [`task: search result | query: ${query.slice(0,4000)}`]);
     const rows = await getPool().query<{
-      id: string; body: string; source_id: string; source_version: number; title: string;
-      url: string; subject: string; country: string; profile: string; captured_at: Date | null; score: number;
+      id: string; body: string; answer_body: string; source_id: string; source_version: number; title: string;
+      url: string; is_template: boolean; subject: string; country: string; profile: string; captured_at: Date | null; score: number;
     }>(`WITH eligible AS (
-      SELECT p.*, s.title, COALESCE(c.url,s.url) AS url, COALESCE(c.captured_at,s.captured_at) AS captured_at,
+      SELECT p.*, s.title,
+        ($7::boolean AND c.body ~* 'Dear (Sir|Madam)' AND c.body ~* 'Sincerely' AND c.body ~* 'cover letter' AND length(c.body)<=10000) AS is_template,
+        CASE WHEN $7::boolean AND c.body ~* 'Dear (Sir|Madam)' AND c.body ~* 'Sincerely' AND c.body ~* 'cover letter' AND length(c.body)<=10000
+          THEN c.body ELSE p.body END AS answer_body,
+        COALESCE(c.url,s.url) AS url, COALESCE(c.captured_at,s.captured_at) AS captured_at,
         CASE WHEN p.comment_id IS NULL THEN 'original_poster' ELSE c.attribution END AS subject,
         1-(p.embedding <=> $1::vector) AS similarity,
         ts_rank(to_tsvector('english',p.body), websearch_to_tsquery('english',$2)) AS lexical
@@ -133,16 +138,20 @@ export async function retrieveHybrid(query: string, country: string, profile: st
       SELECT id, SUM(score) AS score FROM (
         SELECT id, 1.0/(60+rank) AS score FROM semantic UNION ALL SELECT id,1.0/(60+rank) FROM lexical
       ) results GROUP BY id
-    ) SELECT e.*,f.score::float FROM eligible e JOIN fused f USING(id) ORDER BY f.score DESC,e.id LIMIT 6`,
-      [JSON.stringify(vector), lexicalQuery, identity.key, country, profile, overview]);
+    ) SELECT e.*,f.score::float FROM eligible e JOIN fused f USING(id) ORDER BY e.is_template DESC NULLS LAST,f.score DESC,e.id LIMIT 6`,
+      [JSON.stringify(vector), lexicalQuery, identity.key, country, profile, overview, templateRequest]);
     for (const row of rows.rows) {
+      const body = row.answer_body;
       // Prefer a checked interpretation when its quote is contained in the same passage.
-      if (evidence.some(e => e.sourceId === row.source_id && row.body.includes(e.quote))) continue;
-      evidence.push({ id: row.id, summary: "Captured applicant passage · unreviewed", quote: row.body,
+      if (!row.is_template && evidence.some(e => e.sourceId === row.source_id && body.includes(e.quote))) continue;
+      if (evidence.some(e => e.url === row.url && e.quote === body)) continue;
+      evidence.push({ id: row.id, summary: row.is_template ? "Applicant-shared cover letter template · unreviewed" : "Captured applicant passage · unreviewed", quote: body, isTemplate: row.is_template,
         url: row.url, title: row.title, subject: row.subject || "unknown", country: row.country,
         profile: row.profile, action: "unknown", sourceId: row.source_id, sourceVersion: row.source_version,
         capturedAt: row.captured_at?.toISOString(), kind: "applicant_experience", coverage: "partial", reviewStatus: "captured_unreviewed" });
     }
+    // Keep complete templates ahead of brief reviewed document-list mentions.
+    if (templateRequest) evidence.sort((a, b) => Number(Boolean(b.isTemplate)) - Number(Boolean(a.isTemplate)));
     return { captureCount: counts.rows[0].total, filteredCaptureCount: counts.rows[0].matching, evidence: evidence.slice(0,8), kind: "hybrid" as const,
       notice: "Semantic embeddings and text search retrieved current captures. Unreviewed passages are applicant claims; inspect their quotes and sources." };
   } catch (error) {

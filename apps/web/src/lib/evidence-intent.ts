@@ -55,3 +55,12 @@ export function asksApprovalPrediction(question: string) {
     /\b(visa|approv[a-z]*)\b.*\b(guarantee[ds]?|guaranteed|chances?|probability|likelihood)\b/i.test(question) ||
     /\bwill\b.*\b(visa|i|we)\b.*\b(approved|approval)\b/i.test(question);
 }
+
+// Template requests need the shared letter, rather than a document-list mention.
+export function wantsCoverLetterTemplate(question: string, history: string[] = []) {
+  const explicit = documentSearchTerms(question);
+  return /\b(format|templates?|samples?|examples?)\b/i.test(question) &&
+    (explicit.includes("cover letter") ||
+      (!explicit.length && /^(what|which|show|share|give|can|how)\b/i.test(question.trim()) &&
+        documentSearchTerms(history.at(-1) ?? "").includes("cover letter")));
+}

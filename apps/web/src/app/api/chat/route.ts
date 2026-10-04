@@ -8,7 +8,7 @@ import {
   SourceError,
 } from "@schengen/db";
 import { apiError, readInput, stringField } from "@/lib/api-utils";
-import { asksApprovalPrediction, asksOfficialRequirements, contextualDocumentTerms, wantsDocumentOverview } from "@/lib/evidence-intent";
+import { asksApprovalPrediction, asksOfficialRequirements, contextualDocumentTerms, wantsDocumentOverview, wantsCoverLetterTemplate } from "@/lib/evidence-intent";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
@@ -27,9 +27,10 @@ export async function POST(request: Request) {
     if (!Array.isArray(history) || history.length > 6 || history.some(q => typeof q !== "string" || !q.trim() || q.length > 4000))
       throw new SourceError("Chat history must contain at most six previous questions.", 400);
     const overview = wantsDocumentOverview(query);
-    const documentTerms = contextualDocumentTerms(query, history);
+    const templateRequest = wantsCoverLetterTemplate(query, history);
+    const documentTerms = templateRequest ? ["cover letter", "template", "format"] : contextualDocumentTerms(query, history);
     const retrievalQuery = documentTerms.length ? `${query} ${documentTerms.join(" ")}` : query;
-    const retrieval = await retrieveHybrid(retrievalQuery, country, profile, overview, documentTerms.length ? documentTerms.join(" OR ") : query);
+    const retrieval = await retrieveHybrid(retrievalQuery, country, profile, overview, documentTerms.length ? documentTerms.join(" OR ") : query, templateRequest);
     let evidence = retrieval.evidence;
     const searchedTerms = [retrievalQuery];
     let modelNotice = retrieval.notice;
@@ -49,8 +50,8 @@ export async function POST(request: Request) {
     }
     if (!statements.length && !approvalQuestion && !requirementQuestion && evidence.length && process.env.OLLAMA_MODEL) {
       try {
-        const modelQuestion = overview ? "Give a partial overview of documents explicitly reported in these applicant passages. Use lists unless the quoted passage explicitly states submitted or carried; do not prescribe documents for the user. Respect the destination and scenario in the user question; do not present reports from a different scenario as a match. User question: " + query : query;
-        statements = await answerWithEvidence(modelQuestion, evidence, history, overview ? 3 : 1);
+        const modelQuestion = templateRequest ? "Describe the structure of the applicant-shared cover letter template in the passages. Cite the comment containing the actual letter, rather than a document-list mention. Mention that the full example appears in the source passage below; do not copy the applicant's personal details or itinerary as advice. User question: " + query : overview ? "Give a partial overview of documents explicitly reported in these applicant passages. Use lists unless the quoted passage explicitly states submitted or carried; do not prescribe documents for the user. Respect the destination and scenario in the user question; do not present reports from a different scenario as a match. User question: " + query : query;
+        statements = await answerWithEvidence(modelQuestion, evidence, history, templateRequest ? 5 : overview ? 3 : 1);
         answerUnsupported = statements.length === 0;
         modelNotice = retrieval.notice + " Qwen answered from these passages; check its interpretation against the quotes.";
       } catch (error) {

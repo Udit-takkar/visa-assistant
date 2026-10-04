@@ -30,6 +30,7 @@ type Evidence = {
   subject: string;
   sourceId: string;
   reviewStatus?: "reviewed" | "captured_unreviewed";
+  isTemplate?: boolean;
 };
 type Answer = {
   message: string;
@@ -146,7 +147,11 @@ export function AssistantPanel() {
                         {turn.answer.evidence.map((row) => (
                           <article key={row.id} className="answer-evidence">
                             <h4>{row.summary}</h4><small>{row.reviewStatus === "captured_unreviewed" ? "Captured report · not manually reviewed" : "Reviewed observation"}</small>
-                            <blockquote>{row.quote}</blockquote>
+                            {row.isTemplate ? <details>
+                              <summary>Read full cover letter example</summary>
+                              <p>This is an applicant-shared example. Replace its personal details and itinerary with your own truthful information.</p>
+                              <blockquote style={{ maxHeight: "none" }}>{row.quote}</blockquote>
+                            </details> : <blockquote>{row.quote}</blockquote>}
                             <p>
                               {row.country} · {row.profile} · {row.action} ·{" "}
                               {row.subject}
