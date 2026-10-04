@@ -134,17 +134,13 @@ export function AssistantPanel() {
                             })}
                           </div>
                         ))}
-                        {turn.answer.steps && <details className="agent-steps"><summary>Agent activity</summary><ol>{turn.answer.steps.map(step => <li key={step}>{step}</li>)}</ol></details>}
-                        {turn.answer.modelNotice && (
-                          <p>{turn.answer.modelNotice}</p>
-                        )}
-                        {!!turn.answer.searchedTerms?.length && (
-                          <small>
-                            Search terms:{" "}
-                            {turn.answer.searchedTerms.join(" · ")}
-                          </small>
-                        )}
-                        {turn.answer.evidence.map((row) => (
+                        <details className="agent-steps">
+                          <summary>Agent activity</summary>
+                          {turn.answer.steps && <ol>{turn.answer.steps.map(step => <li key={step}>{step}</li>)}</ol>}
+                          {turn.answer.modelNotice && <p>{turn.answer.modelNotice}</p>}
+                          {!!turn.answer.searchedTerms?.length && <small>Search terms: {turn.answer.searchedTerms.join(" · ")}</small>}
+                        </details>
+                        {turn.answer.evidence.filter(row => !turn.answer.statements?.length || turn.answer.statements.some(statement => statement.evidenceIds.includes(row.id))).map((row) => (
                           <article key={row.id} className="answer-evidence">
                             <h4>{row.summary}</h4><small>{row.reviewStatus === "captured_unreviewed" ? "Captured report · not manually reviewed" : "Reviewed observation"}</small>
                             {row.isTemplate ? <details>
@@ -152,10 +148,9 @@ export function AssistantPanel() {
                               <p>This is an applicant-shared example. Replace its personal details and itinerary with your own truthful information.</p>
                               <blockquote style={{ maxHeight: "none" }}>{row.quote}</blockquote>
                             </details> : <blockquote>{row.quote}</blockquote>}
-                            <p>
-                              {row.country} · {row.profile} · {row.action} ·{" "}
-                              {row.subject}
-                            </p>
+                            {[row.country, row.profile, row.action].some(value => value !== "unknown") && <p>
+                              {[row.country, row.profile, row.action].filter(value => value !== "unknown").join(" · ")}
+                            </p>}
                             <a
                               href={row.url}
                               target="_blank"
@@ -168,10 +163,7 @@ export function AssistantPanel() {
                             </Link>
                           </article>
                         ))}
-                        <small>
-                          Results are a snapshot of this search. Search again
-                          after changing a capture or review.
-                        </small>
+
                       </MessageContent>
                     </Message>
                   </div>

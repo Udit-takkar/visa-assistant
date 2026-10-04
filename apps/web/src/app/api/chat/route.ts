@@ -32,6 +32,9 @@ export async function POST(request: Request) {
     const retrievalQuery = documentTerms.length ? `${query} ${documentTerms.join(" ")}` : query;
     const retrieval = await retrieveHybrid(retrievalQuery, country, profile, overview, documentTerms.length ? documentTerms.join(" OR ") : query, templateRequest);
     let evidence = retrieval.evidence;
+    // A template request is answered by actual examples, not nearby mentions.
+    const templates = evidence.filter(row => row.isTemplate);
+    if (templateRequest && templates.length) evidence = templates;
     const searchedTerms = [retrievalQuery];
     let modelNotice = retrieval.notice;
     // Repeated capture/review submissions are one piece of evidence, not corroboration.
@@ -71,7 +74,9 @@ export async function POST(request: Request) {
       : answerUnsupported
       ? "I found related applicant reports, but they do not answer this question. The passages below are context, not proof of the requested fact or current official requirements."
       : evidence.length
-      ? overview
+      ? templateRequest && evidence.some(row => row.isTemplate)
+        ? "I found an applicant-shared cover letter example. Open the full example below and adapt it to your own situation. This is not an official template."
+        : overview
         ? "These passages describe captured applicant experiences, including unreviewed reports. This is a partial report, not your official document checklist. Tell me your destination and work situation in your message for more context."
         : "These captured applicant passages match your search; each result shows its review status. They describe individual experiences; they do not establish current visa requirements or predict approval."
       : gapReason === "nothing_reviewed"
